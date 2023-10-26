@@ -1,0 +1,19 @@
+---
+title: "reesehs-data-replication-assignment"
+author: "Reese Hotten-Somers"
+date: "2023-10-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(curl)
+f <- curl("https://raw.githubusercontent.com/fuzzyatelin/fuzzyatelin.github.io/master/AN588_Fall23/KamilarAndCooperData.csv") #imports data about zombies
+d <- read.csv(f, header = TRUE, sep = ",", stringsAsFactors = FALSE)  #reads data and creates data frame from it
+head(d) #returns data frame
+```
+
