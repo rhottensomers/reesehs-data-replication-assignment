@@ -11,9 +11,62 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 ```{r}
+#current data problems
+
+#recorded by days and by group, how do I split this up in order to analyze the datacorrectly?
+```
+
+
+```{r}
 library(curl)
-f <- curl("https://raw.githubusercontent.com/fuzzyatelin/fuzzyatelin.github.io/master/AN588_Fall23/KamilarAndCooperData.csv") #imports data about zombies
-d <- read.csv(f, header = TRUE, sep = ",", stringsAsFactors = FALSE)  #reads data and creates data frame from it
-head(d) #returns data frame
+f <- curl("https://raw.githubusercontent.com/rhottensomers/reesehs-data-replication-assignment/main/doi_10.5061_dryad.kkwh70s31__v4%202/Gao_Cords_2020_IJP_Dataset1_Daily_data.csv") #imports data about zombies
+d1 <- read.csv(f, header = TRUE, sep = ",", stringsAsFactors = FALSE)  #reads data and creates data frame from it
+head(d1) #returns data frame
+names(d1)
+
+f <- curl("https://raw.githubusercontent.com/rhottensomers/reesehs-data-replication-assignment/main/doi_10.5061_dryad.kkwh70s31__v4%202/Gao_Cords_2020_IJP_Dataset2_Changes_in_female_sexual_activity_and_changes_in_number_of_males_in_group.csv") #imports data about zombies
+d2 <- read.csv(f, header = TRUE, sep = ",", stringsAsFactors = FALSE)  #reads data and creates data frame from it
+head(d2)
+
+do <- merge(d1, d2, by = "Date") #merges data sets together
+View(do)
+
+#With this procedure, we identified one to two conception periods per group per year, or 65 group conception periods total.
+
+concep <- subset(do, select=c("Conception.period.x", "Conception.period.y", "Mating.season"))
+
+concep$Conception.period.x<-ifelse(concep$Conception.period.x=="YES",1,0)
+
+concep$Conception.period.y<-ifelse(concep$Conception.period.y=="Yes",1,0)
+
+concep$Mating.season<-ifelse(concep$Mating.season=="YES",1,0)
+
+#number of days observed? : 16,719 
+ones <-colSums(concep==1) #checks the number of 1 or yeses
+ones #how do I take data from this? 
+
+#ok, but I need to separate data by days in order to figure out how many conception periods there were? 
+
+zeros <- colSums(concep==0)
+zeros
+
+ones/nrow(do) * 100 #percentage of ones(or yeses)
+
+zeros/nrow(do) * 100#percentage of zeros(or nos)
+
+
+
+head(do)
+```
+
+```{r}
+#variables needed for GLMMs
+
+#"test whether larger groups were more likely to contain multiple males and multiple sexually active females per day across group-specific conception periods, we used binomial-family generalized linear mixed models (GLMMs) with a logit- link function and group as a random effect."
+# and separate by group type 
+
+#predictor: mean daily f group size
+
+#dependent: proportion of days(during conception period) when a group contain either: more than two males or more than two sexually active females
 ```
 
