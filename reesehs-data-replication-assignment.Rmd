@@ -1,5 +1,5 @@
 ---
-title: "reesehs-data-replication-assignment"
+title: "Reese Hotten-Somers AN588 Data Replication Assignment "
 author: "Reese Hotten-Somers"
 date: "`r Sys.Date()`"
 output: 
@@ -9,14 +9,24 @@ output:
       toc: yes
       toc_float:
         collapsed: true
-    
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
 ```
 
+
+![BMs](Photos/Blue_Monkey_2.jpeg)\
+
+## Introduction:
+
+For my data replication assignment I decided to replicated analyses from "Effects of Female Group Size on the Number of Males in Blue Monkey (Cercopithecus mitis) Groups" by Lu Gao & Marina Cords. Blue monkeys normally live in a group setting with multiple females but not multiple males. During mating and conception periods males may join the group for a time to mate with females before leave. This paper investigated how well female group size of the blue monkeys could predict the movement of males in and out of the groups specifically during mating and conception periods. They specifically studied 8 different groups within Kakamega Forest in Kenya from 2006-2014. The data set that I used was sourced from the corresponding [dryad page](https://datadryad.org/stash/dataset/doi:10.5061/dryad.kkwh70s31). I determined that I would only need the first data set as all my analyses would correspond to conception period. 
+
+Looking specially at conception periods Gao & Cords used a binomal family generalized linear mixed models(glmms) to determined the relationship between female group size as a predictor for number of males and sexually active females within the group during conception periods. Using the glmm and the data from each conception period they created a scatterplot that graphed the glmm line onto the data. As well they compiled a table that contained information about each group  stating the number of days observed, the mean group size, and proportion of multimale days. And then separating out just observed day during the conception periods they calculated the number of day, and proportion of days with multiple males. For this assignment I will be replicating all calculations within table 1, the two glmms(multi males and sexually active females), and the graph. 
+
+
 ### Preliminary Setup:
+
 ```{r, prelims}
 library(curl)
 library(tidyverse)
@@ -30,94 +40,114 @@ library(lme4)
 library(ggplot2)
 ```
 
-![BMs](Blue_Monkey_2.jpeg)
-## Introduction: 
+## Data Importation:
 
+Using dryad I was able to find the cooresponding data for the paper. There were two excel data sheets and I put both in my project folder and uploaded them to github. The second dataset sheet contained information about individuals within the group which I would not be using for my analyzes. I thus decided to not import it but it is still within the project file just incase. Once uploaded to github it was easy to curl in datasheet 1.
 
-## Data Importation: 
-```{r}
-f <- curl("https://raw.githubusercontent.com/rhottensomers/reesehs-data-replication-assignment/main/doi_10.5061_dryad.kkwh70s31__v4%202/Gao_Cords_2020_IJP_Dataset1_Daily_data.csv") #imports data about zombies
+```{r, import}
+f <- curl("https://raw.githubusercontent.com/rhottensomers/reesehs-data-replication-assignment/main/doi_10.5061_dryad.kkwh70s31__v4%202/Gao_Cords_2020_IJP_Dataset1_Daily_data.csv") #imports data from paper dataset 1
 d1 <- read.csv(f, header = TRUE, sep = ",", stringsAsFactors = FALSE)  #reads data and creates data frame from it
-head(d1) #returns data frame
-str(d1)
-names(d1)#mating season and conception period and group as factor, n of sex fs and males in group switch to NA and then convert to factor
+head(d1, 4) #returns first 4 rows of data frame
+```
 
+This datasheet contains data from each observation day, of which there were 16,719. Each data entry contains the group, number of sexually active females and males in the group, whether it was a mating season or conception period, and the female group size. After importing I needed to assess how the data was structured and manipulate it so it would be ready of analyses.
+
+```{r}
+str(d1) #structure of dataframe
+
+#r does not understhand ND so I converted all NDs to NAs within the dataframe
 d1$N.sex.active.females <- na_if(d1$N.sex.active.females,"ND")
 d1$N.males.in.group <-  na_if(d1$N.males.in.group,"ND")
 d1$Mating.season <- na_if(d1$Mating.season, "ND")
 
-#d1$Group <- as.factor(d1$Group)
+#converts mating season and conception periods into factored values
 d1$Mating.season <- as.factor(d1$Mating.season)
 d1$Conception.period <- as.factor(d1$Conception.period)
 
-
+#converting in numbers instead of characters as it will be easier to use with anlayses 
 d1$N.sex.active.females <- as.numeric(d1$N.sex.active.females)
 d1$N.males.in.group <- as.numeric(d1$N.males.in.group)
+
+#using lubridate to convert the dates into month, day, year formula
 d1$Date <- mdy(d1$Date)
+
+#check that each column is in desired structure
 str(d1)
-view(d1)
 
+head(d1, 1)
+```
 
+Now that the data was in my desired structure I decided to do an initial analysis regarding the number of group observational days that were multimale days. The article stated that it was 15% of days, however, my answer differed slightly. 
+
+```{r, mmd}
+#finds the number of days where the number of males in group is greater than or equal to two which removing nas
 mmd <- sum(d1$N.males.in.group >= 2, na.rm = TRUE)
 
-mmd/nrow(d1) * 100 #percent of days with multiple male 
+mmd/nrow(d1) * 100 #finds percent of days with multiple male 
 
-view(d1)
 ```
 
-```{r}
-#variables needed for GLMMs
+While 14.616% is slightly lower than the expected value, it is not by much. Most likely there was data that was excluded but not reported. Or it was rounding. 
 
-#"test whether larger groups were more likely to contain multiple males and multiple sexually active females per day across group-specific conception periods, we used binomial-family generalized linear mixed models (GLMMs) with a logit- link function and group as a random effect."
+The determining factors of the analyses that will be run rely on knowing if there are multiple males or multiple sexually active female an each day of data. The data has the number of each factor in their own column, N.males.in.group and N.sex.active.females, however, I needed to divide the numbers into two groups: those less than two and those equal to or above two(how the authors describe multiple). In order to acomplish this I used tidverse bins to separate the numbers. This created two new columns: Mbin and Fbin that label whether that day contains 2(+) or <2 of each factor.
 
-#predictor: mean daily f group size
-
-#dependent: proportion of days(during conception period) when a group contain either: more than two males or more than two sexually active females
-```
-
-## Code for Separating Conception Periods:
-```{r, initial_sep}
-
+```{r, bins}
 d1 <- d1 %>% mutate(Mbin = case_when(N.males.in.group < 2 ~ "<2",N.males.in.group >= 2 ~ "2+"))
 
-summary(as.factor(d1$Mbin))
-#d1 <- filter(d1, Conception.period == "YES" )
-
-head(d1)
-
-
 d1 <- d1 %>% mutate(Fbin = case_when(N.sex.active.females < 2 ~ "<2F",N.sex.active.females >= 2 ~ "2+F"))
+
 head(d1)
-view(d1)
-
-# a: 2006-06-26- 2006-08-16, Gn
-df2 <- d1[c(177:228),]
-view(df2)
-names(df2)
-
-fdf <- data.frame("Gn", mean(df2$Female.Group.Size),  sum(df2$Mbin == "2+")/length(df2$Conception.period), sum(df2$Fbin == "2+F")/length(df2$Conception.period))
-names(fdf) <- c("GroupNames", "Mean.Female.Group.Size", "Proportion.of.Two.Plus.Male.Days", "Proportion.of.Two.Plus.SA.Female.Days")
-head(fdf)
-
 ```
+</br>
+
+![*cercopithecus mitis*](Photos/Blue_Monkey.jpeg)\
+
+</br>
+
+## Code for Separating Conception Periods:
+
+
+The statistics that I will be looking at pertain conception periods. However, it is not just conception periods overall, but proportions of multiple males or sexually active females in each group during each individual conception period. The article reported that they found 65 conception periods, however, they do not explicitly state when they are, only indicating within the data a 'yes' or 'no' if the date was in a conception period. Because of this, I need to be able to separate out each individual conception period and run analysis on each one. Although there is most likely a more efficient way of separating out each conception period, I manually went through and found the start and end date and row numbers. As well, there ended up by multiple entries for each day so I kept the data not by date but by group name in order to separate the data correctly. 
+
+I ultimately decided to separate each conception period into a dataframe, and perform these analyses about the conception period itself: mean female group size, proportion of multi male days, proportion of multi sexually active female days, and report the group name as well. These would then be added to a new data frame called fdf.  
+
+```{r, initial_sep}
+#for simplicity sake I assigned each subsetted conception period to a new dataframe starting with a
+
+# a: 2006-06-26- 2006-08-16, Gn (start and end dates and what group it corresponds to)
+
+df2 <- d1[c(177:228),] #rows 177 to 228 of datasheet dataframe 1
+
+#I then created the final dataframe that I would use for analyses
+
+fdf <- data.frame("Gn", mean(df2$Female.Group.Size),sum(df2$Mbin == "2+")/length(df2$Conception.period), sum(df2$Fbin == "2+F")/length(df2$Conception.period)) #calculations that correlate to each column 
+
+#Column names for each calculation
+names(fdf) <- c("GroupNames", "Mean.Female.Group.Size", "Proportion.of.Two.Plus.Male.Days", "Proportion.of.Two.Plus.SA.Female.Days") 
+
+#What the new dataframe looks like with the first conception period 
+head(fdf) 
+```
+
+Having to do the calculations and add them to a new row to the dataframe 64 times over would not be very efficient code. So for time sake I created a function that would take the subset of d1 for the conception period and perform the calculations and create a new row out of them to be added to the final dataframe later. 
 
 ```{r, function}
 calc <- function(f) {
-  m <- (mean(f$Female.Group.Size))
-  s1 <- (sum(f$Mbin == "2+", na.rm = TRUE)/length(f$Conception.period))
-  s2 <- (sum(f$Fbin == "2+F", na.rm = TRUE)/length(f$Conception.period))
-  n <- f[1,2]
-  new_row = c(n, m, s1, s2)
+  m <- (mean(f$Female.Group.Size)) #find mean female group size with conception period
+  s1 <- (sum(f$Mbin == "2+", na.rm = TRUE)/length(f$Conception.period)) #finds proportion of days with 2 or more males within conception period
+  s2 <- (sum(f$Fbin == "2+F", na.rm = TRUE)/length(f$Conception.period)) #calculates proportion of days with 2 or more sexually active females within conception period
+  n <- f[1,2] #finds group name
+  new_row = c(n, m, s1, s2) #adds calculations to a vector row
   return(new_row)
 }
 ```
 
-
-```{r, rest_sep, echo=T, class.source = 'fold-hide'}
+It was then time to run the calculations on the rest of the conception periods: 
+```{r, rest_sep, echo=T, }
 
 # b: 2007-06-09 - 2007-12-15, Gn 
-b <- d1[c(525:714),]
-fdf <- rbind(fdf, calc(b))
+b <- d1[c(525:714),] #conception period
+fdf <- rbind(fdf, calc(b)) #uses function to calculate the needed values and binds the row to  the fdf dataframe
 
 # c: 2008-06-18 - 2008-11-01
 c <- d1[c(900:1036),]
@@ -371,23 +401,45 @@ fdf <- rbind(fdf, calc(l2))
 m2 <- d1[c(17148:17337),]
 fdf <- rbind(fdf, calc(m2))
 
-head(fdf)
+#I then realized that the data was structured weirdly so I manipulated it to the desired structure 
 
+str(fdf)
+
+#Making group names factors instead of chrs
 fdf$GroupNames <- as.factor(fdf$GroupNames )
-names(fdf)
 
+#Converting the doubles to numeric values 
 fdf$Mean.Female.Group.Size <- as.numeric(fdf$Mean.Female.Group.Size)
 fdf$Proportion.of.Two.Plus.Male.Days <- as.numeric(fdf$Proportion.of.Two.Plus.Male.Days)
 fdf$Proportion.of.Two.Plus.SA.Female.Days <- as.numeric(fdf$Proportion.of.Two.Plus.SA.Female.Days)
-view(fdf)
-names(fdf)
 
-str(fdf)
+str(fdf)#finalized structure
+
+#Here is the finalized fdf dataframe
+head(fdf, 20)
+
+#Checking number of conception periods, which is correct 
+length(fdf$GroupNames)
 ```
-## Table 1: 
+</br>
+
+![Blue Monkey](Photos/Blue_Monkey_3.jpeg)\
+
+</br>
+
+## Table 1:
+
+Now that the calculations for each conception period are done and within their own dataframe the statistic replications can start. As stated in the introduction I will be replacting Table 1 from the article. This includes group based statistics from the conception periods in general. This is different than the calculations for fdf, table one is looking at data across the entire observation period when it was a conception period for each group. There are two columns within the table: number of mating seasons and proportion of influx during mating seasons, which I will not be replicating because all other statistics I will be looking at only pertain to conception period. I determined that mating season statistics would require a whole different way to separating data which would be time consuming and not as relevant as the conception period statistics. Below is the table I will be replicating: 
+
+![Article Table 1](Photos/Cords_Table Large.jpeg) 
+
+</br>
+
+I first needed to separate the original datasheet, d1, by group and assign it to a new dataframe to be manipulated. I used filters to pull the data relating to each group from d1. 
+
 ```{r, table stats}
 #Gs
-dfgs <- filter(d1, Group == "Gs" )
+dfgs <- filter(d1, Group == "Gs" ) #takes ass rows containing data with the group Gs
 
 #Gn
 dfgn <- filter(d1, Group == "Gn" )
@@ -412,62 +464,101 @@ dftws <- filter(d1, Group == "Tws" )
 
 ```
 
-```{r, table_function}
+Now that I had dataframes for each group I needed to perform the calculations for the table on each group. I started the table dataframe by first manually performing the calculations group Tws. I then created a new dataframe with the correct column names from that inital data. 
 
-tdf <- data.frame("Tws",sum(dftws$Female.Group.Size)/length(dftws$Female.Group.Size), length(dftws$Group), sum(dftws$Mbin == "2+", na.rm = TRUE)/length(dftws$Mbin), sum(dftws$Conception.period == "YES"))
-names(tdf) <- c("Group", "Mean female group size", "Total observation days", "Proportion of multimale days", "Total group-specific conception period days")
+
+```{r, table_function}
+#Table Calulations for group Tws in order: finding mean female group size, total days of observation, proportion of multimale days, total conception period days
+
+tdf <- data.frame("Tws",sum(dftws$Female.Group.Size)/length(dftws$Female.Group.Size), length(dftws$Group), sum(dftws$Mbin == "2+", na.rm = TRUE)/length(dftws$Mbin),  sum(dftws$Conception.period == "YES")) #adds calculations to dataframe tdf
+
+#Provides names for the datframe column 
+names(tdf) <- c("Group", "Mean female group size", "Total observation days", "Proportion of multimale days", "Total group-specific conception period days") 
+
+#In order for the last calculation(proportion of conception period days with multi males) I pulled out days that would indicated as conception days for the group:
+
 dftws <- filter(dftws, Conception.period == "YES" )
+
+#Using the edited dataframe I calculated the proportion of days with multiple males nand added it to tdf in a new column with its appropriate name:
 
 tdf$`Proportion of conception period days with.multiple males` <- sum(dftws$Mbin == "2+", na.rm = T)/length(dftws$Mbin)
 
+#Here is what the first row of my table looks like
+head(tdf)
+```
 
+As with the code for separating out the individual conception periods I wrote a function to perform the calculations and create a new row that could be added to the table data frame. 
+
+```{r, table_function2}
+#Function for table calculations  
 table <- function(f){
-  gn <- f[1,2]
-  mfgs <- sum(f$Female.Group.Size)/length(f$Female.Group.Size)
-  od <- length(f$Group)
-  pmmd <- sum(f$Mbin == "2+", na.rm = TRUE)/length(f$Group)
-  cpd <-  sum(f$Conception.period == "YES" )
-  f <- filter(f, Conception.period == "YES" )
-  mmcpd <-  sum(f$Mbin == "2+", na.rm = TRUE)/length(f$Mbin)
-  new_dfrow = c(gn, mfgs, od, pmmd, cpd, mmcpd)
-  return(new_dfrow)
+  gn <- f[1,2] #determines group name
+  mfgs <- sum(f$Female.Group.Size)/length(f$Female.Group.Size) #determined mean female group size
+  od <- length(f$Group) #number of observation days
+  pmmd <- sum(f$Mbin == "2+", na.rm = TRUE)/length(f$Group) #determined proportion of multi male days
+  cpd <-  sum(f$Conception.period == "YES" ) #determines number of conception period days for the group
+  f <- filter(f, Conception.period == "YES" ) #filters out non-conception period days
+  mmcpd <-  sum(f$Mbin == "2+", na.rm = TRUE)/length(f$Mbin) #calculates the proportion of conception period days with mutliple males
+  new_dfrow = c(gn, mfgs, od, pmmd, cpd, mmcpd) #creates new row with the previously calculated values
+  return(new_dfrow) #output of function
 }
 
-tdf <- rbind(tdf, table(dfgs))
+#Now I did the statistics for each group using function and their corresponding dataframe 
+tdf <- rbind(tdf, table(dfgs)) #binds table statistics for the group to the table data frame
 tdf <- rbind(tdf, table(dfgn))
 tdf <- rbind(tdf, table(dfgsaa))
 tdf <- rbind(tdf, table(dfgsa))
 tdf <- rbind(tdf, table(dfgsc))
 tdf <- rbind(tdf, table(dftwn))
 tdf <- rbind(tdf, table(dfgsb))
-head(tdf, n = 8)
 
+#Here is what the table looks like without final manipulations
+head(tdf, n = 8)
+```
+
+As always with calculations and data manipulation it results in weird structure types. Most importantly all numbers within the tdf were currently categorized as chr and needed to be converted to numerics. Also I needed to add the correct number of significant figures for each column of the table. 
+
+```{r, table_functionstr}
+#Structure of the data frame
 str(tdf)
 
+#Converts previously character values into numerics
 tdf$`Mean female group size` <- as.numeric(tdf$`Mean female group size`)
 tdf$`Proportion of multimale days` <- as.numeric(tdf$`Proportion of multimale days`)
 tdf$`Total group-specific conception period days` <- as.numeric(tdf$`Total group-specific conception period days`)
 tdf$`Proportion of conception period days with.multiple males` <- as.numeric(tdf$`Proportion of conception period days with.multiple males`)
 
+#Rounds numbers to correct significant figure values for their corresponding column
+
 tdf$`Mean female group size` <- round(tdf$`Mean female group size`, digits = 1)
 tdf$`Proportion of multimale days` <- round(tdf$`Proportion of multimale days`, digits = 3)
 tdf$`Proportion of conception period days with.multiple males` <- round(tdf$`Proportion of conception period days with.multiple males`, digits = 2)
+```
 
+**Gao&Cords Table 1:** 
+![Table 1](Photos/Cords_Table Large.jpeg)\
 
-knitr::kable(tdf)
+**Replicated Table:**
+```{r, finaltable}
+knitr::kable(tdf)#Displays Table 
 ```
 
 
 
-![Table 1](Cords_Table Large.jpeg)
-![Blue Monkey Pair](Blue_Monkey_Pair.jpeg)
+Although my mean female group size values all matched up with the original article some of my other numbers were a little off. This could be because of rounding error however I think that it is most likely due to the fact that my total observation day values are quite off. I checked using summary as.factor on the group column of d1 to check that I didn't calculate incorrectly, however, it resulted with the same values as above. It is possible that some data inputs were taken out of the original dataset during Gao and Cords analysis and it was not reported. Regardless, given the data and writing available within the article these are the values I am able to replicate. All other decimals in the table are slightly off from the expected values but this is most likely due to the increased number of observation days causing lower numbers in the dividing process.  
 
-## GLMMs: 
+</br>
 
-For this data replication I decided to replicate two GLMMs that described whether a particular group was more likely to include multiple(more than two) males or multiple sexually active females during the already defined 65 conception periods. This required two GLMMs: one that looked at multiple males and group size, and another that looked at multiple sexual active females and group size. The GLMMs themselves as states within the statistics section of the article were binomial family and thus used a logit-link function and group as a random effect. The predictor values being mean female group size during each conception period and proportion of days during conception periods where there were multiple males or sexual active females  However, it was not stated whether they used intercept or slope form for their GLMMs. So I decided to run both to see if one fit the data better, and the intercept form resulted with a better AIC(52.2 vs 56.2). I will first begin with the multiple male GLMM below: 
+![Blue Monkey Pair](Photos/Blue_Monkey_Pair.jpeg)\
 
-### Multi-male GLMM: 
-In the results section of the article it was stated that their GLMM resulted in these values: β = 0.021, 95% CI [0.007, 0.034], P = 0.015. In this section I will run the GLMM and attempt to receive the same or similar numbers. 
+## GLMMs:
+
+For this data replication I decided to replicate two GLMMs that described whether a particular group was more likely to include multiple(more than two) males or multiple sexually active females during the already defined 65 conception periods. This required two GLMMs: one that looked at multiple males and group size, and another that looked at multiple sexual active females and group size. The GLMMs themselves as states within the statistics section of the article were binomial family and thus used a logit-link function and group as a random effect. The predictor values being mean female group size during each conception period and proportion of days during conception periods where there were multiple males or sexual active females However, it was not stated whether they used intercept or slope form for their GLMMs. So I decided to run both to see if one fit the data better, and the intercept form resulted with a better AIC(52.2 vs 56.2). I will first begin with the multiple male GLMM below:
+
+### Multi-male GLMM:
+
+In the results section of the article it was stated that their GLMM resulted in these values: β = 0.021, 95% CI [0.007, 0.034], P = 0.015. In this section I will run the GLMM and attempt to receive the same or similar numbers.
+
 ```{r, glmms}
 mglmm <-glmer( Proportion.of.Two.Plus.Male.Days ~ Mean.Female.Group.Size + (1 | GroupNames), family = binomial, data = fdf) #intercept form of multi-male GLMM with binomial link and fdf data frame of conception periods
 
@@ -480,14 +571,14 @@ anova(null, mglmm, test = "Chisq") #liklihood ratio test and returns p value
 exp(confint(mglmm, parm = "Mean.Female.Group.Size")) #returns 95% confidence intervals
 ```
 
-Discussion, discussion
+What is quite obvious is that my numbers for this GLMM: β =  0.1185, 95% CI [0.9665, 1.331562], P = 0.1286 (Pr is 0.13795) are not at all similar to those published in the paper:  β = 0.021, 95% CI [0.007, 0.034], P = 0.015. Not only are the beta values over 0.0975 apart, my glmm has a non-significant p value. I tried many variations of this glmm and checked my data manipulation but none of it allowed the glmm numbers to become closer to the expected values. Because it was not stated in the article whether they used intercept or slope form of the glmm I decided to test out the slope form. 
+
 
 ```{r, mslope}
 smglmm <- glmer( Proportion.of.Two.Plus.Male.Days ~ Mean.Female.Group.Size + (1 + Mean.Female.Group.Size | GroupNames), family = binomial(link = "logit"), data = fdf) #slope form of multi-male GLMM
 summary(smglmm) #returns glmm 
 ```
-
-AIC values etc
+The values of this glmm were quite similar to the other: β =  0.11846 but the AIC value was higher at 56.2 vs the intercept glmm at 52.2. So ultimately I decided that the intercept form of the glmm was a better fit for the data, but still not close to the expected values of the article. To rule out miscalculations on my part I decided to run a linear mixed effect model on the data with group as a random effect but not link as that is not part of the lmer function. 
 
 ```{r, lmm}
 mlmer <- lmer(data = fdf, Proportion.of.Two.Plus.Male.Days ~ Mean.Female.Group.Size + (1|GroupNames), REML = FALSE) #linear mixed model version of mutli-male GLMM
@@ -498,12 +589,14 @@ nmlmer <- lmer(data = fdf, Proportion.of.Two.Plus.Male.Days ~ 1 + (1|GroupNames)
 
 anova(nmlmer, mlmer, test = "Chisq") #likelihood ratio test
 
-confint(mlmer, level = .95)
+confint(mlmer, level = .95)#finds 95% confidence intervals for mlmer
 ```
+The linear mixed effects model ended up having the same values as the values from the paper: β =   0.0218, 95% CI [0.00603, 0.0342], P = 0.1286 vs the expected values of β = 0.021, 95% CI [0.007, 0.034], P = 0.015. What this implies is that either somewhere within my code some data is becoming miscalculated or the article published values for a lmm and not a glmm like they indicated in both the statistics section and the results sections. As well, the glmm model states that mean female group size does not significantly predict number of days with multiple males. However, I will still check that this is also the case of multiple sexually active females and group size with its own glmm calculations. 
 
-### Multiple Sexually Active Female GLMM: 
 
-Also in the results section the multi-sexually active female GLMM results were given: β = 0.010, 95% CI [0.002, 0.018], P = 0.017. In this next section I will again attempt to recieve similar numbers from my own GLMMs. 
+### Multiple Sexually Active Female GLMM:
+
+Also in the results section the multi-sexually active female GLMM results were given: β = 0.010, 95% CI [0.002, 0.018], P = 0.01458. In this next section I will again attempt to recieve similar numbers from my own GLMMs on female behavior.
 
 ```{r, fglmms}
 fglmm <- glmer( Proportion.of.Two.Plus.SA.Female.Days ~ Mean.Female.Group.Size + (1 | GroupNames), family =binomial(link = "logit"), data = fdf) #
@@ -519,57 +612,72 @@ exp(confint(fglmm, parm = "Mean.Female.Group.Size")) # 95% confidence interval
 
 ```
 
-wow, this one is weird too!
+Similar to the multimale glmm all the intercept form glmm calculated values: β = 0.04642, 95% CI [0.847016, 1.295848], P = 0.6573 or .6579 from chi squared test are different than the expected values: β = 0.010, 95% CI [0.002, 0.018], P = 0.01458. My beta values is half of the expected and my p value is highly insignificant. I then moved on to the slope glmm to test the AIC values and determine if it was as better fit for the data. 
 
 ```{r, sfglmm}
-glmer( Proportion.of.Two.Plus.SA.Female.Days ~ Mean.Female.Group.Size + (1 + Mean.Female.Group.Size | GroupNames), family =binomial(link = "logit"), data = fdf)
+glmer( Proportion.of.Two.Plus.SA.Female.Days ~ Mean.Female.Group.Size + (1 + Mean.Female.Group.Size | GroupNames), family =binomial(link = "logit"), data = fdf) #give model for slope form the the multiple sexually active females glmm
 ```
 
-AIC yadaydad
+Yet again the AIC value of the slope of the glmm is higher at 39.8572 than the intercept form at 35.9. The beta value of 0.04642 was very similar to the intercept glmm. I then determined that the intercept form of glmm was a better fit, though it was yet again not close to the expected values. I turned to linear mixed effects modeling to rule out wrong calculations in my coding. 
 
 ```{r, flmms}
-flmm <- lmer(data = fdf, Proportion.of.Two.Plus.SA.Female.Days ~ Mean.Female.Group.Size + (1|GroupNames), REML = FALSE)
+flmm <- lmer(data = fdf, Proportion.of.Two.Plus.SA.Female.Days ~ Mean.Female.Group.Size + (1|GroupNames), REML = FALSE)#creates linear mixed effect model determining relationship between female size and number of days within the group with multiple sexually active females
 summary(flmm)
 
-nflmm <- lmer(data = fdf, Proportion.of.Two.Plus.SA.Female.Days ~ 1 + (1|GroupNames), REML = FALSE)
+nflmm <- lmer(data = fdf, Proportion.of.Two.Plus.SA.Female.Days ~ 1 + (1|GroupNames), REML = FALSE) #null verys of the lmem
 
-anova(nflmm, flmm, test = "Chisq")
+anova(nflmm, flmm, test = "Chisq")#performs chi squared likihood test.
 
 confint(flmm,level = .95) # 95% confidence interval 
 ```
 
+As with the multi-male glmm, the lmm of the sexually active female data: β = 0.0106, 95% CI [0.00217, 0.01829], P= 0.02005 is almost identical to the expected values: β = 0.010, 95% CI [0.002, 0.018],  P = 0.01458. The p value is slightly higher, however, that does not negate that within the article they reported that they used glmms for both analyses of multi-male and sexually active females. As both glmms that I calculated reported different values and insignificant relationships between female group size and the dependent variables. 
 
+## Graphs ultilizing GLMMs:
 
-## Graphs ultilizing GLMMs: 
+The cullmination of all the data manipulation and modeling is graphing it onto the data. Figure 3 within the paper graphs how group size influnces multi-male or mutli-sexually active female days. The red lines represent their corresponding GLMMS. Below is the graphs I will be replicating in this final section:
 
+![Figure 3 Graph](Photos/Cords_Graph.jpeg)
 
+Given that the GLMMs gave different values than the expected values I decided to plot both the GLMM and linear mixed effects model onto the data to see how they fit. I first created a prediction line for the GLMMs and added it to fdf and then created a scatterplot using the conception period data from fdf. Then each group was assigned a corresponding shape and the lines were added. Red for the linear mixed effects model and blue for the GLMM prediction line. 
+
+Here is the coding for the multiple male graph: 
 ```{r, plotting1}
 fdf$prediction1 <- predict(mglmm, type = "response", newdata = fdf) #adds prediction line using the mutli-male GLMM
 
-p1 <- ggplot(data = fdf, aes(x = Mean.Female.Group.Size, y = Proportion.of.Two.Plus.Male.Days, shape = GroupNames)) + geom_point() + scale_shape_manual( values = c(2,1,4,3,7,5,6,0)) +  geom_abline(slope = .02178, intercept = -0.06905, color = "red") + ylab("Proportion of Multimale Days") + xlab("Female Group Size") + geom_line(data = fdf, aes(x = Mean.Female.Group.Size, y = prediction1), color = "blue") +  scale_color_manual(name = "Models", values = c("Linear Mixed Model" = "red", "GLMM" = "blue")) +theme(legend.direction = "vertical", legend.box = "vertical") #plots conception period data along with the linear mixed model and the GLMM lines
+p1 <- ggplot(data = fdf, aes(x = Mean.Female.Group.Size, y = Proportion.of.Two.Plus.Male.Days, shape = GroupNames)) + geom_point() + scale_shape_manual( values = c(2,1,4,3,7,5,6,0))+  geom_abline(slope = .02178, intercept = -0.06905, color = "red") + ylab("Proportion of Multimale Days") + xlab("Female Group Size") + geom_line(data = fdf, aes(x = Mean.Female.Group.Size, y = prediction1), color = "blue")  #plots conception period data along with the linear mixed model and the GLMM lines
+#scale shape manual uses shape = groupnames parameter to assign different shapes to each group name
 ```
 
+</br>
+<center>
+![Multi-male graph](Photos/Graph 1.jpeg){#id .class width=50% height=50%}/
+</center>
 
+```{r, plottingp1, echo= T, class.source = 'fold-hide', fig.align='center'}
+p1
+```
+As stated before, the red line corresponds the the linear mixed model and the blue line corresponds to the prediction values from the glmm. The lmm line almost exactly lines up with the graph line from the article, while the glmm does not. What is interesting is that glmms, especially binomial linked ones, would never result in a straight prediction line because of their transformation of the data for analyses. This furthers my suspicions as to why the paper stated that they used a glmm for the data. However, both the lmm and glmm predict, although not significantly for the glmm, a positive relationship between female group size and proportion of days with more than 2 or more males during conception periods.
+
+</br>
+
+Here is the code for the multiple sexually active female graph:
 ```{r, plotting2}
 fdf$prediction2 <- predict(fglmm, type = "response", newdata = fdf)#adds prediction line for mutli-sa female GLMM
 
-p2 <- ggplot(data = fdf, aes(x = Mean.Female.Group.Size, y = Proportion.of.Two.Plus.SA.Female.Days, shape = GroupNames )) + geom_point() + ylim(0, 1) + scale_shape_manual( values = c(2,1,4,3,7,5,6,0)) + geom_abline(slope = 0.01061 , intercept = 0.04214, color = "red" ) + ylab("Proportion of Days with ≥2 Sexual Active Females") + xlab("Female Group Size") + geom_line(data = fdf, aes(x = Mean.Female.Group.Size, y = prediction2), color = "blue")
+p2 <- ggplot(data = fdf, aes(x = Mean.Female.Group.Size, y = Proportion.of.Two.Plus.SA.Female.Days, shape = GroupNames )) + geom_point() + ylim(0, 1) + scale_shape_manual( values = c(2,1,4,3,7,5,6,0)) + geom_abline(slope = 0.01061 , intercept = 0.04214, color = "red" ) + ylab("Proportion of Days with ≥2 Sexual Active Females") + xlab("Female Group Size") + geom_line(data = fdf, aes(x = Mean.Female.Group.Size, y = prediction2), color = "blue") #creates scatterplot of data with lmm and glmm lines drawn on 
+#uses same shape determinate as previous graph
+#abline is just the lmm line using the intercept and slope to graph it onto the data
 ```
 
-![Graph from Article](Cords_Graph.jpeg)
+</br>
+<center>
+![Multi-sa female graph](Photos/Graph 2.jpeg){#id .class width=50% height=50%}/
+</center>
 
-
-```{r, plottingp1}
-p1
-```
-
-
-```{r, plottingp2}
+```{r, plottingp2, echo= T, class.source = 'fold-hide', fig.align='center'}
 p2
 
 ```
 
-
-
-
-
+Just like the p1 graph, the lmm line is the same as the line is the article graph. The glmm predicted line seems to be a worse representation of the data than the lmm line, however, a glmm is the correct way to model the data. The slope of the glmm model is very small indicating that there is even less of a relationship between female group size and number of days with 2 or more sexually active females during conception periods
