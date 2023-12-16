@@ -45,9 +45,9 @@ library(ggplot2)
 Using dryad I was able to find the cooresponding data for the paper. There were two excel data sheets and I put both in my project folder and uploaded them to github. The second dataset sheet contained information about individuals within the group which I would not be using for my analyzes. I thus decided to not import it but it is still within the project file just incase. Once uploaded to github it was easy to curl in datasheet 1.
 
 ```{r, import}
-f <- curl("https://raw.githubusercontent.com/rhottensomers/reesehs-data-replication-assignment/main/doi_10.5061_dryad.kkwh70s31__v4%202/Gao_Cords_2020_IJP_Dataset1_Daily_data.csv") #imports data from paper dataset 1
+f <- curl("https://raw.githubusercontent.com/rhottensomers/reesehs-data-replication-assignment/main/Datasheets/Gao_Cords_2020_IJP_Dataset1_Daily_data.csv") #imports data from paper dataset 1
 d1 <- read.csv(f, header = TRUE, sep = ",", stringsAsFactors = FALSE)  #reads data and creates data frame from it
-head(d1, 4) #returns first 4 rows of data frame
+head(d1, 4) #returns first 4 rows of data frame d1
 ```
 
 This datasheet contains data from each observation day, of which there were 16,719. Each data entry contains the group, number of sexually active females and males in the group, whether it was a mating season or conception period, and the female group size. After importing I needed to assess how the data was structured and manipulate it so it would be ready of analyses.
